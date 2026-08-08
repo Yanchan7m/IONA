@@ -72,6 +72,7 @@ p.lead{color:var(--muted);font-size:clamp(16px,2vw,20px);line-height:1.5;max-wid
 .track.t-hero{height:120vh}
 .track.t-yard{height:440vh}
 .track.t-crane{height:360vh}
+.track.t-road{height:360vh}
 .track.t-ocean{height:360vh}
 .track.t-globe{height:360vh}
 .stage{position:sticky;top:0;height:100vh;overflow:hidden;perspective:1400px;
@@ -124,6 +125,19 @@ canvas.layer{position:absolute;inset:0;width:100%;height:100%;display:block}
 .trolley{position:absolute;transform-style:preserve-3d;will-change:transform}
 .cable{position:absolute;left:50%;top:0;width:3px;background:linear-gradient(var(--ink),var(--muted));
   transform:translateX(-50%);transform-origin:top center;will-change:height}
+
+/* ---------- Semi truck ---------- */
+.truck{position:absolute;transform-style:preserve-3d;will-change:transform}
+.windshield{position:absolute;width:66px;height:56px;
+  background:linear-gradient(135deg,rgba(190,224,255,.92),rgba(70,110,150,.55));
+  border:2px solid rgba(0,0,0,.4);border-radius:5px}
+.wheel{position:absolute;width:48px;height:48px;border-radius:50%;
+  background:radial-gradient(circle at 50% 50%,#20242b 0 60%,#0a0c0f 62% 78%,#000 80%);
+  border:2px solid #000;will-change:transform}
+.wheel::after{content:"";position:absolute;inset:30%;border-radius:50%;
+  background:conic-gradient(from 0deg,#828a94 0 6deg,#20242b 6deg 84deg,#828a94 84deg 96deg,
+  #20242b 96deg 174deg,#828a94 174deg 186deg,#20242b 186deg 264deg,#828a94 264deg 276deg,
+  #20242b 276deg 354deg,#828a94 354deg 360deg)}
 
 /* ---------- Cargo ship ---------- */
 .ship{position:absolute;transform-style:preserve-3d;will-change:transform}
@@ -253,7 +267,43 @@ footer{border-top:1px solid var(--line);padding:60px 0 48px;margin-top:60px}
   </div>
 </section>
 
-<!-- ============ 4 · CARGO SHIP ON SEA ============ -->
+<!-- ============ 4 · SEMI TRUCK ON THE ROAD ============ -->
+<section class="track t-road" id="road" aria-label="Truck on the road">
+  <div class="stage">
+    <canvas class="layer" id="roadCanvas" aria-hidden="true"></canvas>
+    <div class="scene" id="truckScene">
+      <div class="truck" id="truck">
+        <!-- trailer container -->
+        <div class="box" style="--c:#e8480f;--c2:#c73c0c;--w:360px;--h:150px;--d:150px;left:-330px;top:-150px">
+          <div class="face side f-front"><span class="code">IONU 330 274 6<small>22G1 · ROAD</small></span><span class="logo-side">IONA</span></div>
+          <div class="face side f-back"></div><div class="face end f-right"></div>
+          <div class="face end f-left"></div><div class="face cap f-top"></div><div class="face cap f-bottom"></div>
+        </div>
+        <!-- chassis -->
+        <div class="box" style="--c:#12181f;--c2:#0c1116;--w:530px;--h:16px;--d:120px;left:-330px;top:2px"></div>
+        <!-- cab -->
+        <div class="box" style="--c:#2f6bd0;--c2:#25539f;--w:130px;--h:132px;--d:150px;left:40px;top:-132px">
+          <div class="face side f-front"></div><div class="face side f-back"></div>
+          <div class="face end f-right"></div><div class="face end f-left"></div>
+          <div class="face cap f-top"></div><div class="face cap f-bottom"></div>
+        </div>
+        <div class="windshield" style="left:78px;top:-118px;transform:translateZ(76px)"></div>
+        <!-- wheels -->
+        <div class="wheel" style="left:-300px;top:20px"></div>
+        <div class="wheel" style="left:-232px;top:20px"></div>
+        <div class="wheel" style="left:-120px;top:20px"></div>
+        <div class="wheel" style="left:60px;top:20px"></div>
+        <div class="wheel" style="left:122px;top:20px"></div>
+      </div>
+    </div>
+    <div class="overlay" id="roadCopy" style="top:13%;left:0;right:0">
+      <p class="eyebrow mono" style="justify-content:center">Last mile</p>
+      <h2>From port to door,<br>without a gap</h2>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 5 · CARGO SHIP ON SEA ============ -->
 <section class="track t-ocean" id="sea" aria-label="Cargo ship at sea">
   <div class="stage" style="background:linear-gradient(to bottom,var(--sky-1),var(--sky-2))">
     <canvas class="layer" id="ocean" aria-hidden="true"></canvas>
@@ -435,12 +485,15 @@ footer{border-top:1px solid var(--line);padding:60px 0 48px;margin-top:60px}
   var craneTrack=document.getElementById("crane"),craneRig=document.getElementById("craneRig"),
       trolley=document.getElementById("trolley"),cable=document.getElementById("cable"),
       craneBox=document.getElementById("craneBox"),craneCopy=document.getElementById("craneCopy");
+  var roadTrack=document.getElementById("road"),truck=document.getElementById("truck"),
+      roadCopy=document.getElementById("roadCopy"),wheels=truck.querySelectorAll(".wheel");
   var seaTrack=document.getElementById("sea"),ship=document.getElementById("ship"),seaCopy=document.getElementById("seaCopy");
   var globeTrack=document.getElementById("globe");
 
-  var cur={hero:0,yard:0,crane:0,sea:0},tgt={hero:0,yard:0,crane:0,sea:0},raf=false;
+  var roadOffset=0;
+  var cur={hero:0,yard:0,crane:0,road:0,sea:0},tgt={hero:0,yard:0,crane:0,road:0,sea:0},raf=false;
 
-  function computeTargets(){tgt.hero=trackP(heroTrack);tgt.yard=trackP(yardTrack);tgt.crane=trackP(craneTrack);tgt.sea=trackP(seaTrack);}
+  function computeTargets(){tgt.hero=trackP(heroTrack);tgt.yard=trackP(yardTrack);tgt.crane=trackP(craneTrack);tgt.road=trackP(roadTrack);tgt.sea=trackP(seaTrack);}
 
   function renderScroll(){
     var moving=false;
@@ -474,6 +527,15 @@ footer{border-top:1px solid var(--line);padding:60px 0 48px;margin-top:60px}
     cable.style.height=hoist.toFixed(1)+"px";
     craneBox.style.transform="translateY("+hoist.toFixed(1)+"px) rotateY("+(Math.sin(cp*6.28)*3).toFixed(2)+"deg)";
     craneCopy.style.opacity=(1-map(cp,.6,.95)).toFixed(3);
+
+    /* TRUCK: drives across, wheels spin, road dashes scroll */
+    var rp=cur.road;
+    var tx=lerp(-innerWidth*.62,innerWidth*.58,rp), bounce=Math.sin(rp*60)*2.2;
+    truck.style.transform="translate3d("+tx.toFixed(1)+"px,"+bounce.toFixed(1)+"px,0) rotateY(-22deg) rotateX(5deg) scale(.86)";
+    roadOffset=tx;
+    var spin=(tx*1.15).toFixed(1);
+    for(var wi=0;wi<wheels.length;wi++)wheels[wi].style.transform="rotate("+spin+"deg)";
+    roadCopy.style.opacity=(1-map(rp,.6,.95)).toFixed(3);
 
     /* SHIP: sails across + bobs */
     var sp=cur.sea;
@@ -577,7 +639,25 @@ footer{border-top:1px solid var(--line);padding:60px 0 48px;margin-top:60px}
       x.globalAlpha=.7;x.font="9px ui-monospace,monospace";x.fillStyle=ink;x.fillText(pt[0],sx+5,sy+3);x.globalAlpha=1;});
   });
 
-  function sizeAll(){[dust,ocean,globe].forEach(sizeCanvas);}
+  /* --- Road (ground + moving dashed lines) --- */
+  var road=registerCanvas(document.getElementById("roadCanvas"),roadTrack,function(a,t){
+    var x=a.ctx,W=a.w,H=a.h,horizon=H*.60;x.clearRect(0,0,W,H);
+    var g=x.createLinearGradient(0,horizon,0,H);
+    g.addColorStop(0,css("--bg-2"));g.addColorStop(1,"rgba(0,0,0,.32)");
+    x.fillStyle=g;x.fillRect(0,horizon,W,H-horizon);
+    /* asphalt band in perspective */
+    x.fillStyle="rgba(0,0,0,.30)";
+    x.beginPath();x.moveTo(W*.5-70,horizon);x.lineTo(W*.5+70,horizon);x.lineTo(W,H);x.lineTo(0,H);x.closePath();x.fill();
+    /* two lane dashes scrolling with the truck */
+    x.strokeStyle=css("--accent");x.globalAlpha=.55;x.lineWidth=4;
+    x.setLineDash([30,26]);x.lineDashOffset=-roadOffset*.7;
+    x.beginPath();var y1=H*.78;x.moveTo(0,y1);x.lineTo(W,y1);x.stroke();
+    x.globalAlpha=.28;x.lineWidth=2;x.lineDashOffset=-roadOffset*.45;
+    x.beginPath();var y2=H*.68;x.moveTo(0,y2);x.lineTo(W,y2);x.stroke();
+    x.setLineDash([]);x.globalAlpha=1;
+  });
+
+  function sizeAll(){[dust,ocean,globe,road].forEach(sizeCanvas);}
 
   /* ---- Master clock: only ticks active canvases ---- */
   function clock(t){for(var i=0;i<animators.length;i++){var a=animators[i];if(a.active)a.tick(a,t);}requestAnimationFrame(clock);}
