@@ -4,352 +4,304 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IONA — Global Freight</title>
-<meta name="description" content="IONA — démo de site logistique avec conteneurs 3D animés au scroll.">
+<meta name="description" content="IONA — démo logistique immersive : conteneurs, grue, navire et globe des routes animés au scroll.">
 <style>
 /* ============================================================
-   IONA — self-contained demo
-   Technique: pinned (sticky) 3D scene + scroll-driven transforms.
-   No external dependencies. Works by opening this file directly.
+   IONA — self-contained immersive demo (v2)
+   5 scroll-driven scenes: dust hero · container yard · gantry
+   crane · cargo ship on animated sea · rotating route globe.
+   Pure HTML/CSS/JS + <canvas>. No external dependencies.
    ============================================================ */
 
-/* ---- Tokens: light is the bare :root, dark redefines ---- */
+/* ---------- Theme tokens ---------- */
 :root{
-  --bg:#eef1f4;
-  --bg-2:#e4e8ed;
-  --panel:#ffffff;
-  --ink:#0c1116;
-  --muted:#5b6875;
-  --line:#d3dae1;
-  --accent:#e8480f;       /* safety orange */
-  --accent-ink:#ffffff;
-  --blue:#2f6bd0;
-  --steel:#8b98a5;
-  --glow:rgba(232,72,15,.16);
-  --stage-floor:rgba(12,17,22,.06);
-  color-scheme:light;
+  --bg:#eef1f4; --bg-2:#e4e8ed; --panel:#ffffff; --ink:#0c1116;
+  --muted:#5b6875; --line:#d3dae1; --accent:#e8480f; --accent-ink:#fff;
+  --blue:#2f6bd0; --steel:#8b98a5; --sea:#2f6bd0; --sky-1:#cfd9e4; --sky-2:#eef1f4;
+  --stage-floor:rgba(12,17,22,.06); color-scheme:light;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
-    --bg:#0b0f14;
-    --bg-2:#0e141b;
-    --panel:#12181f;
-    --ink:#e8edf2;
-    --muted:#8b98a5;
-    --line:#233040;
-    --accent:#ff5a1f;
-    --accent-ink:#0b0f14;
-    --blue:#3a7bd5;
-    --steel:#6f7d8b;
-    --glow:rgba(255,90,31,.20);
-    --stage-floor:rgba(255,255,255,.04);
-    color-scheme:dark;
+    --bg:#0b0f14; --bg-2:#0e141b; --panel:#12181f; --ink:#e8edf2;
+    --muted:#8b98a5; --line:#233040; --accent:#ff5a1f; --accent-ink:#0b0f14;
+    --blue:#3a7bd5; --steel:#6f7d8b; --sea:#0f2740; --sky-1:#0b0f14; --sky-2:#13202e;
+    --stage-floor:rgba(255,255,255,.04); color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
-  --bg:#0b0f14; --bg-2:#0e141b; --panel:#12181f; --ink:#e8edf2;
-  --muted:#8b98a5; --line:#233040; --accent:#ff5a1f; --accent-ink:#0b0f14;
-  --blue:#3a7bd5; --steel:#6f7d8b; --glow:rgba(255,90,31,.20);
+  --bg:#0b0f14; --bg-2:#0e141b; --panel:#12181f; --ink:#e8edf2; --muted:#8b98a5;
+  --line:#233040; --accent:#ff5a1f; --accent-ink:#0b0f14; --blue:#3a7bd5;
+  --steel:#6f7d8b; --sea:#0f2740; --sky-1:#0b0f14; --sky-2:#13202e;
   --stage-floor:rgba(255,255,255,.04); color-scheme:dark;
 }
 
 *{box-sizing:border-box}
-html{scroll-behavior:auto}
 body{
-  margin:0;
-  background:var(--bg);
-  color:var(--ink);
+  margin:0;background:var(--bg);color:var(--ink);overflow-x:hidden;
   font-family:"Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;
   -webkit-font-smoothing:antialiased;
-  overflow-x:hidden;
 }
-.mono{font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+.mono{font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace}
 
-/* ---- Progress bar ---- */
-.progress{position:fixed;top:0;left:0;height:2px;width:100%;z-index:60;background:transparent}
-.progress > i{display:block;height:100%;width:0;background:var(--accent);transition:width .08s linear}
-
-/* ---- Top bar ---- */
-.topbar{
-  position:fixed;top:0;left:0;right:0;z-index:50;
-  display:flex;align-items:center;justify-content:space-between;
-  padding:18px clamp(16px,4vw,48px);
-  mix-blend-mode:difference; /* stays legible over dark & light containers */
-  color:#fff;
-}
+/* ---------- Chrome ---------- */
+.progress{position:fixed;top:0;left:0;height:2px;width:100%;z-index:60}
+.progress>i{display:block;height:100%;width:0;background:var(--accent)}
+.topbar{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;align-items:center;
+  justify-content:space-between;padding:18px clamp(16px,4vw,48px);mix-blend-mode:difference;color:#fff}
 .brand{font-weight:800;letter-spacing:.28em;font-size:15px}
-.brand b{color:#fff}
 .nav{display:flex;gap:22px;font-size:11px;letter-spacing:.18em;text-transform:uppercase}
-.nav a{color:#fff;text-decoration:none;opacity:.8}
-.nav a:hover{opacity:1}
+.nav a{color:#fff;text-decoration:none;opacity:.8}.nav a:hover{opacity:1}
 @media(max-width:680px){.nav{display:none}}
+.toggle{position:fixed;right:16px;bottom:16px;z-index:60;background:var(--panel);
+  border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:9px 14px;
+  font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.14em;cursor:pointer}
+.toggle:hover{border-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 
-/* ---- Section frame ---- */
-section{position:relative}
-.wrap{max-width:1200px;margin:0 auto;padding:0 clamp(16px,4vw,48px)}
-.eyebrow{
-  font-family:ui-monospace,Menlo,Consolas,monospace;
-  font-size:11px;letter-spacing:.34em;text-transform:uppercase;color:var(--accent);
-  display:inline-flex;align-items:center;gap:10px;margin:0 0 22px;
-}
+/* ---------- Type ---------- */
+.eyebrow{font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.34em;
+  text-transform:uppercase;color:var(--accent);display:inline-flex;align-items:center;gap:10px;margin:0 0 22px}
 .eyebrow::before{content:"";width:26px;height:1px;background:var(--accent)}
 h1,h2{margin:0;font-weight:800;line-height:.92;letter-spacing:-.02em;text-wrap:balance;text-transform:uppercase}
-h1{font-size:clamp(48px,11vw,150px)}
-h2{font-size:clamp(34px,6.4vw,88px)}
+h1{font-size:clamp(46px,10.5vw,140px)}
+h2{font-size:clamp(32px,6vw,84px)}
 p.lead{color:var(--muted);font-size:clamp(16px,2vw,20px);line-height:1.5;max-width:60ch}
 
-/* =========================================================
-   PINNED 3D SCENE  (the centrepiece)
-   .track is tall; .stage sticks while we scroll through it.
-   ========================================================= */
-.track{position:relative;height:420vh}
-.stage{
-  position:sticky;top:0;height:100vh;overflow:hidden;
-  background:
-    radial-gradient(120% 90% at 50% 8%, var(--bg-2), var(--bg) 60%);
-  perspective:1400px;
-}
-.stage::after{ /* floor shadow / horizon */
-  content:"";position:absolute;left:0;right:0;bottom:0;height:40%;
-  background:linear-gradient(to top,var(--stage-floor),transparent);
-  pointer-events:none;
-}
-.scene{
-  position:absolute;inset:0;
-  display:flex;align-items:center;justify-content:center;
-  transform-style:preserve-3d;
-  will-change:transform;
-}
-/* Hero copy layered inside the scene */
-.hero-copy{
-  position:absolute;z-index:5;text-align:center;pointer-events:none;
-  padding:0 16px;will-change:transform,opacity;
-}
-.hero-copy h1{color:var(--ink)}
-.hero-copy .sub{
-  margin:18px auto 0;color:var(--muted);max-width:44ch;
-  font-size:clamp(14px,1.6vw,18px);line-height:1.5;
-}
-.scroll-cue{
-  position:absolute;bottom:26px;left:50%;transform:translateX(-50%);
-  font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.3em;
-  text-transform:uppercase;color:var(--muted);z-index:6;
-  display:flex;flex-direction:column;align-items:center;gap:8px;
-}
-.scroll-cue span{width:1px;height:34px;background:linear-gradient(var(--accent),transparent);animation:cue 1.8s ease-in-out infinite}
+/* ---------- Generic pinned scene ---------- */
+.track{position:relative}
+.track.t-hero{height:120vh}
+.track.t-yard{height:440vh}
+.track.t-crane{height:360vh}
+.track.t-ocean{height:360vh}
+.track.t-globe{height:360vh}
+.stage{position:sticky;top:0;height:100vh;overflow:hidden;perspective:1400px;
+  background:radial-gradient(120% 90% at 50% 6%,var(--bg-2),var(--bg) 62%)}
+.stage::after{content:"";position:absolute;left:0;right:0;bottom:0;height:38%;
+  background:linear-gradient(to top,var(--stage-floor),transparent);pointer-events:none}
+.scene{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  transform-style:preserve-3d;will-change:transform}
+canvas.layer{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+.overlay{position:absolute;z-index:6;text-align:center;pointer-events:none;padding:0 16px;will-change:transform,opacity}
+.overlay h1,.overlay h2{color:var(--ink)}
+.overlay .sub{margin:18px auto 0;color:var(--muted);max-width:46ch;font-size:clamp(14px,1.6vw,18px);line-height:1.5}
+.overlay .m{font-family:ui-monospace,Menlo,monospace;color:var(--accent);font-size:12px;
+  letter-spacing:.3em;text-transform:uppercase;margin-top:14px;display:block}
+.scroll-cue{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);z-index:7;
+  font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.3em;text-transform:uppercase;
+  color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:8px}
+.scroll-cue span{width:1px;height:34px;background:linear-gradient(var(--accent),transparent);
+  animation:cue 1.8s ease-in-out infinite}
 @keyframes cue{0%,100%{opacity:.25;transform:scaleY(.5)}50%{opacity:1;transform:scaleY(1)}}
 
-/* Mid-scene headline that appears as containers assemble */
-.stage-line{
-  position:absolute;z-index:2;text-align:center;pointer-events:none;
-  opacity:0;will-change:opacity,transform;
-}
-.stage-line h2{color:var(--ink);mix-blend-mode:normal}
-.stage-line .m{font-family:ui-monospace,Menlo,monospace;color:var(--accent);
-  font-size:12px;letter-spacing:.3em;text-transform:uppercase;margin-top:14px;display:block}
-
-/* =========================================================
-   3D CONTAINER COMPONENT (a real box: 6 faces)
-   ========================================================= */
-.box{
-  position:absolute;transform-style:preserve-3d;will-change:transform;
-  --w:260px;--h:150px;--d:150px;
-}
-.face{position:absolute;overflow:hidden;
-  border:1px solid rgba(0,0,0,.28);
-}
-/* corrugation */
-.face.side{
-  width:var(--w);height:var(--h);
-  background:
-    repeating-linear-gradient(90deg,
-      rgba(255,255,255,.10) 0 3px,
-      rgba(0,0,0,.14) 3px 12px);
-  background-color:var(--c);
-}
-.face.end{
-  width:var(--d);height:var(--h);
-  background:
-    repeating-linear-gradient(90deg,
-      rgba(255,255,255,.08) 0 2px,
-      rgba(0,0,0,.16) 2px 9px);
-  background-color:var(--c2,var(--c));
-}
-.face.cap{
-  width:var(--w);height:var(--d);
-  background:var(--c);
-  filter:brightness(1.12);
-  background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.10) 0 6px,transparent 6px 26px);
-}
-/* frame rails on ends */
-.face.end::before,.face.end::after{
-  content:"";position:absolute;left:6px;right:6px;height:6px;background:rgba(0,0,0,.28)}
+/* ---------- 3D container box ---------- */
+.box{position:absolute;transform-style:preserve-3d;will-change:transform;--w:300px;--h:168px;--d:168px}
+.face{position:absolute;overflow:hidden;border:1px solid rgba(0,0,0,.28)}
+.face.side{width:var(--w);height:var(--h);background-color:var(--c);
+  background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.10) 0 3px,rgba(0,0,0,.14) 3px 12px)}
+.face.end{width:var(--d);height:var(--h);background-color:var(--c2,var(--c));
+  background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.08) 0 2px,rgba(0,0,0,.16) 2px 9px)}
+.face.cap{width:var(--w);height:var(--d);background:var(--c);filter:brightness(1.12);
+  background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.10) 0 6px,transparent 6px 26px)}
+.face.end::before,.face.end::after{content:"";position:absolute;left:6px;right:6px;height:6px;background:rgba(0,0,0,.28)}
 .face.end::before{top:6px}.face.end::after{bottom:6px}
-/* placement */
-.f-front {transform:translateZ(calc(var(--d)/2))}
-.f-back  {transform:rotateY(180deg) translateZ(calc(var(--d)/2))}
-.f-right {left:calc(var(--w)/2 - var(--d)/2);transform:rotateY(90deg) translateZ(calc(var(--w)/2))}
-.f-left  {left:calc(var(--w)/2 - var(--d)/2);transform:rotateY(-90deg) translateZ(calc(var(--w)/2))}
-.f-top   {top:calc(var(--h)/2 - var(--d)/2);transform:rotateX(90deg) translateZ(calc(var(--h)/2))}
+.f-front{transform:translateZ(calc(var(--d)/2))}
+.f-back{transform:rotateY(180deg) translateZ(calc(var(--d)/2))}
+.f-right{left:calc(var(--w)/2 - var(--d)/2);transform:rotateY(90deg) translateZ(calc(var(--w)/2))}
+.f-left{left:calc(var(--w)/2 - var(--d)/2);transform:rotateY(-90deg) translateZ(calc(var(--w)/2))}
+.f-top{top:calc(var(--h)/2 - var(--d)/2);transform:rotateX(90deg) translateZ(calc(var(--h)/2))}
 .f-bottom{top:calc(var(--h)/2 - var(--d)/2);transform:rotateX(-90deg) translateZ(calc(var(--h)/2));filter:brightness(.7)}
-/* stencilled ISO code on the side */
-.code{
-  position:absolute;left:14px;bottom:12px;color:rgba(255,255,255,.92);
-  font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;
-  font-size:13px;letter-spacing:.14em;text-shadow:0 1px 0 rgba(0,0,0,.4);
-}
+.code{position:absolute;left:14px;bottom:12px;color:rgba(255,255,255,.92);
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-size:13px;
+  letter-spacing:.14em;text-shadow:0 1px 0 rgba(0,0,0,.4)}
 .code small{display:block;font-size:9px;letter-spacing:.24em;opacity:.7;font-weight:500}
-.logo-side{
-  position:absolute;right:16px;top:14px;color:rgba(255,255,255,.85);
-  font-weight:800;font-size:15px;letter-spacing:.2em;
-}
+.logo-side{position:absolute;right:16px;top:14px;color:rgba(255,255,255,.85);font-weight:800;font-size:15px;letter-spacing:.2em}
 
-/* =========================================================
-   Standard content sections
-   ========================================================= */
-.section{padding:clamp(80px,14vh,180px) 0}
+/* ---------- Gantry crane ---------- */
+.crane{position:absolute;transform-style:preserve-3d;will-change:transform}
+.beam{position:absolute;transform-style:preserve-3d}
+.beam .face{border-color:rgba(0,0,0,.3)}
+.trolley{position:absolute;transform-style:preserve-3d;will-change:transform}
+.cable{position:absolute;left:50%;top:0;width:3px;background:linear-gradient(var(--ink),var(--muted));
+  transform:translateX(-50%);transform-origin:top center;will-change:height}
+
+/* ---------- Cargo ship ---------- */
+.ship{position:absolute;transform-style:preserve-3d;will-change:transform}
+
+/* ---------- Globe routes panel ---------- */
+.routes{position:absolute;right:clamp(16px,4vw,54px);top:50%;transform:translateY(-50%);z-index:6;
+  width:min(340px,42vw);background:color-mix(in srgb,var(--panel) 82%,transparent);
+  border:1px solid var(--line);border-radius:16px;padding:20px;backdrop-filter:blur(8px)}
+@media(max-width:720px){.routes{right:50%;transform:translate(50%,-50%);width:min(360px,86vw)}}
+.routes h3{margin:0 0 14px;font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--muted);font-family:ui-monospace,monospace}
+.route{display:grid;grid-template-columns:1fr auto;gap:6px 10px;padding:11px 0;border-top:1px solid var(--line);
+  font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.route:first-of-type{border-top:0}
+.route .pair{color:var(--ink)}
+.route .st{justify-self:end;color:var(--accent);font-size:11px}
+.route .bar{grid-column:1/-1;height:3px;border-radius:2px;background:var(--line);overflow:hidden}
+.route .bar>i{display:block;height:100%;width:30%;background:var(--accent)}
+
+/* ---------- Static content ---------- */
+.wrap{max-width:1200px;margin:0 auto;padding:0 clamp(16px,4vw,48px)}
+.section{padding:clamp(80px,14vh,170px) 0}
 .reveal{opacity:0;transform:translateY(34px);transition:opacity .9s cubic-bezier(.2,.7,.2,1),transform .9s cubic-bezier(.2,.7,.2,1)}
 .reveal.in{opacity:1;transform:none}
 .reveal.d1{transition-delay:.08s}.reveal.d2{transition-delay:.16s}.reveal.d3{transition-delay:.24s}
-
 .split{display:grid;grid-template-columns:1.1fr .9fr;gap:clamp(28px,6vw,80px);align-items:center}
 @media(max-width:820px){.split{grid-template-columns:1fr}}
-
-/* Manifest / stats */
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
   border:1px solid var(--line);border-radius:14px;overflow:hidden}
 @media(max-width:720px){.stats{grid-template-columns:repeat(2,1fr)}}
 .stat{background:var(--panel);padding:clamp(22px,3vw,34px)}
 .stat .n{font-size:clamp(34px,5vw,58px);font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .stat .n em{color:var(--accent);font-style:normal}
-.stat .l{margin-top:8px;color:var(--muted);font-family:ui-monospace,Menlo,monospace;
-  font-size:11px;letter-spacing:.2em;text-transform:uppercase}
-
+.stat .l{margin-top:8px;color:var(--muted);font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase}
 .manifest{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel)}
-.manifest .row{display:grid;grid-template-columns:1fr 1fr auto;gap:16px;
-  padding:14px clamp(16px,2.4vw,26px);border-top:1px solid var(--line);
-  font-family:ui-monospace,Menlo,monospace;font-size:13px;align-items:center}
-.manifest .row:first-child{border-top:0;color:var(--muted);text-transform:uppercase;
-  letter-spacing:.18em;font-size:10px}
+.manifest .row{display:grid;grid-template-columns:1fr 1fr auto;gap:16px;padding:14px clamp(16px,2.4vw,26px);
+  border-top:1px solid var(--line);font-family:ui-monospace,Menlo,monospace;font-size:13px;align-items:center}
+.manifest .row:first-child{border-top:0;color:var(--muted);text-transform:uppercase;letter-spacing:.18em;font-size:10px}
 .manifest .row .st{justify-self:end;color:var(--blue)}
 .manifest .row .st.ok{color:var(--accent)}
-.tag{display:inline-block;padding:3px 9px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:11px}
-
-/* Trusted / logos */
-.logos{display:flex;flex-wrap:wrap;gap:clamp(20px,5vw,64px);align-items:center;justify-content:center;
-  opacity:.72;filter:saturate(0)}
+.logos{display:flex;flex-wrap:wrap;gap:clamp(20px,5vw,64px);align-items:center;justify-content:center;opacity:.72;filter:saturate(0)}
 .logos .lg{font-weight:800;letter-spacing:.14em;font-size:clamp(16px,2.4vw,24px);color:var(--ink)}
 .logos .lg span{color:var(--accent)}
-
-/* CTA */
-.cta{display:inline-flex;align-items:center;gap:12px;margin-top:34px;
-  background:var(--accent);color:var(--accent-ink);text-decoration:none;font-weight:800;
-  letter-spacing:.04em;padding:16px 26px;border-radius:12px;transition:transform .2s ease}
-.cta:hover{transform:translateY(-2px)}
-.cta .arrow{transition:transform .2s ease}.cta:hover .arrow{transform:translateX(4px)}
-
-/* Footer */
+.cta{display:inline-flex;align-items:center;gap:12px;margin-top:34px;background:var(--accent);color:var(--accent-ink);
+  text-decoration:none;font-weight:800;letter-spacing:.04em;padding:16px 26px;border-radius:12px;transition:transform .2s}
+.cta:hover{transform:translateY(-2px)}.cta .arrow{transition:transform .2s}.cta:hover .arrow{transform:translateX(4px)}
 footer{border-top:1px solid var(--line);padding:60px 0 48px;margin-top:60px}
 .foot{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;align-items:flex-end}
 .foot .big{font-size:clamp(40px,9vw,120px);font-weight:800;letter-spacing:-.03em;line-height:.9}
 .foot .meta{color:var(--muted);font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.9}
 
-/* Theme toggle */
-.toggle{position:fixed;right:16px;bottom:16px;z-index:60;background:var(--panel);
-  border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:9px 14px;
-  font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.14em;cursor:pointer}
-.toggle:hover{border-color:var(--accent)}
-
-:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-
 @media(prefers-reduced-motion:reduce){
+  .track{height:auto!important}
+  .stage{position:relative;height:auto;min-height:100vh;padding:120px 0}
   .reveal{opacity:1;transform:none;transition:none}
   .scroll-cue span{animation:none}
-  .track{height:auto}
-  .stage{position:relative;height:auto;min-height:100vh;padding:120px 0}
 }
 </style>
 </head>
 <body>
 <div class="progress" aria-hidden="true"><i id="pbar"></i></div>
-
 <header class="topbar">
-  <div class="brand">IONA<b>·</b>FREIGHT</div>
+  <div class="brand">IONA·FREIGHT</div>
   <nav class="nav" aria-label="Primary">
-    <a href="#network">Network</a>
-    <a href="#manifest">Manifest</a>
-    <a href="#trust">Clients</a>
-    <a href="#contact">Contact</a>
+    <a href="#yard">Yard</a><a href="#crane">Crane</a><a href="#sea">Fleet</a>
+    <a href="#globe">Network</a><a href="#contact">Contact</a>
   </nav>
 </header>
 
-<!-- ============ PINNED 3D SCENE ============ -->
-<section class="track" id="scene" aria-label="Freight in motion">
+<!-- ============ 1 · HERO (dust + rotating container) ============ -->
+<section class="track t-hero" id="hero" aria-label="Hero">
   <div class="stage">
-    <div class="scene" id="scene3d">
-
-      <!-- hero copy -->
-      <div class="hero-copy" id="heroCopy">
-        <p class="eyebrow mono">Global Freight · Est. MMXXV</p>
-        <h1>Reliability at<br>every milestone</h1>
-        <p class="sub">Nous déplaçons de l'acier à travers le monde — sans drame, sans retard. Fais défiler.</p>
-      </div>
-
-      <!-- assembled headline -->
-      <div class="stage-line" id="stageLine">
-        <h2>Legacies that work<br>as hard as you do</h2>
-        <span class="m">— 240 ports · 14 000 conteneurs / jour</span>
-      </div>
-
-      <!-- containers -->
-      <div class="box" id="b1" style="--c:#e8480f;--c2:#c73c0c;--w:300px;--h:168px;--d:168px">
+    <canvas class="layer" id="dust" aria-hidden="true"></canvas>
+    <div class="scene" id="heroScene">
+      <div class="box" id="heroBox" style="--c:#e8480f;--c2:#c73c0c;--w:320px;--h:180px;--d:180px">
         <div class="face side f-front"><span class="code">IONU 482 019 3<small>22G1 · MAX 30 480 KG</small></span><span class="logo-side">IONA</span></div>
-        <div class="face side f-back"></div>
-        <div class="face end f-right"></div>
-        <div class="face end f-left"></div>
-        <div class="face cap f-top"></div>
-        <div class="face cap f-bottom"></div>
+        <div class="face side f-back"></div><div class="face end f-right"></div>
+        <div class="face end f-left"></div><div class="face cap f-top"></div><div class="face cap f-bottom"></div>
       </div>
-
-      <div class="box" id="b2" style="--c:#2f6bd0;--c2:#25539f;--w:300px;--h:168px;--d:168px">
-        <div class="face side f-front"><span class="code">IONU 771 640 8<small>45R1 · REEFER</small></span><span class="logo-side">IONA</span></div>
-        <div class="face side f-back"></div>
-        <div class="face end f-right"></div>
-        <div class="face end f-left"></div>
-        <div class="face cap f-top"></div>
-        <div class="face cap f-bottom"></div>
-      </div>
-
-      <div class="box" id="b3" style="--c:#c9ccd1;--c2:#a9adb3;--w:300px;--h:168px;--d:168px">
-        <div class="face side f-front"><span class="code" style="color:#1a1e24;text-shadow:none">IONU 019 553 1<small style="opacity:.6">22G1 · DRY</small></span><span class="logo-side" style="color:#1a1e24">IONA</span></div>
-        <div class="face side f-back"></div>
-        <div class="face end f-right"></div>
-        <div class="face end f-left"></div>
-        <div class="face cap f-top"></div>
-        <div class="face cap f-bottom"></div>
-      </div>
-
-      <div class="box" id="b4" style="--c:#f0a500;--c2:#c98700;--w:300px;--h:168px;--d:168px">
-        <div class="face side f-front"><span class="code" style="color:#1a1e24;text-shadow:none">IONU 330 274 6<small style="opacity:.6">22U1 · OPEN TOP</small></span><span class="logo-side" style="color:#1a1e24">IONA</span></div>
-        <div class="face side f-back"></div>
-        <div class="face end f-right"></div>
-        <div class="face end f-left"></div>
-        <div class="face cap f-top"></div>
-        <div class="face cap f-bottom"></div>
-      </div>
-
+    </div>
+    <div class="overlay" id="heroCopy" style="z-index:6">
+      <p class="eyebrow mono" style="justify-content:center">Global Freight · Est. MMXXV</p>
+      <h1>Reliability at<br>every milestone</h1>
+      <p class="sub">Nous déplaçons de l'acier à travers le monde — sans drame, sans retard. Fais défiler.</p>
     </div>
     <div class="scroll-cue" aria-hidden="true">Scroll<span></span></div>
   </div>
 </section>
 
-<!-- ============ NETWORK / SPLIT ============ -->
-<section class="section" id="network">
+<!-- ============ 2 · CONTAINER YARD (assemble wall) ============ -->
+<section class="track t-yard" id="yard" aria-label="Container yard">
+  <div class="stage">
+    <div class="scene" id="yardScene"></div>
+    <div class="overlay" id="yardLine" style="opacity:0">
+      <h2>A yard that<br>never sleeps</h2>
+      <span class="m">— 14 000 conteneurs manutentionnés / jour</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3 · GANTRY CRANE ============ -->
+<section class="track t-crane" id="crane" aria-label="Gantry crane">
+  <div class="stage">
+    <div class="scene" id="craneScene">
+      <div class="crane" id="craneRig">
+        <!-- legs -->
+        <div class="box" style="--c:#f0a500;--c2:#c98700;--w:26px;--h:340px;--d:26px;left:-230px;top:-40px"></div>
+        <div class="box" style="--c:#f0a500;--c2:#c98700;--w:26px;--h:340px;--d:26px;left:200px;top:-40px"></div>
+        <!-- top beam -->
+        <div class="box" style="--c:#f0a500;--c2:#c98700;--w:500px;--h:30px;--d:34px;left:-235px;top:-210px"></div>
+        <!-- trolley -->
+        <div class="trolley" id="trolley" style="left:0;top:-196px">
+          <div class="box" style="--c:#12181f;--c2:#0c1116;--w:56px;--h:30px;--d:40px;left:-28px"></div>
+          <div class="cable" id="cable" style="height:120px"></div>
+          <!-- lifted container -->
+          <div class="box" id="craneBox" style="--c:#2f6bd0;--c2:#25539f;--w:200px;--h:112px;--d:112px;left:-100px">
+            <div class="face side f-front"><span class="code">IONU 771 640 8<small>45R1 · REEFER</small></span><span class="logo-side">IONA</span></div>
+            <div class="face side f-back"></div><div class="face end f-right"></div>
+            <div class="face end f-left"></div><div class="face cap f-top"></div><div class="face cap f-bottom"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="overlay" id="craneCopy" style="top:12%;left:0;right:0">
+      <p class="eyebrow mono" style="justify-content:center">Precision handling</p>
+      <h2>Every box, placed<br>to the millimetre</h2>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4 · CARGO SHIP ON SEA ============ -->
+<section class="track t-ocean" id="sea" aria-label="Cargo ship at sea">
+  <div class="stage" style="background:linear-gradient(to bottom,var(--sky-1),var(--sky-2))">
+    <canvas class="layer" id="ocean" aria-hidden="true"></canvas>
+    <div class="scene" id="shipScene">
+      <div class="ship" id="ship">
+        <!-- hull -->
+        <div class="box" style="--c:#12181f;--c2:#0c1116;--w:560px;--h:96px;--d:120px;left:-280px;top:40px"></div>
+        <div class="box" style="--c:#e8480f;--c2:#c73c0c;--w:560px;--h:16px;--d:120px;left:-280px;top:34px"></div>
+        <!-- bridge tower (stern) -->
+        <div class="box" style="--c:#e8edf2;--c2:#c9ccd1;--w:70px;--h:96px;--d:96px;left:150px;top:-58px"></div>
+        <div class="box" style="--c:#12181f;--w:70px;--h:14px;--d:96px;left:150px;top:-72px"></div>
+        <!-- deck cargo (mini containers) -->
+        <div id="deckCargo"></div>
+      </div>
+    </div>
+    <div class="overlay" id="seaCopy" style="top:14%;left:0;right:0">
+      <p class="eyebrow mono" style="justify-content:center">Ocean line</p>
+      <h2>Legacies that work<br>as hard as you do</h2>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 5 · ROUTE GLOBE ============ -->
+<section class="track t-globe" id="globe" aria-label="Network globe">
+  <div class="stage">
+    <canvas class="layer" id="globeCanvas" aria-hidden="true"></canvas>
+    <div class="overlay" id="globeCopy" style="left:clamp(16px,6vw,80px);top:16%;text-align:left;max-width:520px">
+      <p class="eyebrow mono">Live network</p>
+      <h2 style="text-align:left">240 ports.<br>One operator.</h2>
+    </div>
+    <aside class="routes" aria-label="Active routes">
+      <h3>Routes actives</h3>
+      <div class="route"><span class="pair">RTM → SIN</span><span class="st">EN MER</span><div class="bar"><i style="width:64%"></i></div></div>
+      <div class="route"><span class="pair">SHA → LAX</span><span class="st">EN MER</span><div class="bar"><i style="width:38%"></i></div></div>
+      <div class="route"><span class="pair">HAM → NYC</span><span class="st">EN MER</span><div class="bar"><i style="width:81%"></i></div></div>
+      <div class="route"><span class="pair">DXB → BOM</span><span class="st">CHARGEMENT</span><div class="bar"><i style="width:12%"></i></div></div>
+    </aside>
+  </div>
+</section>
+
+<!-- ============ STATS ============ -->
+<section class="section" id="stats">
   <div class="wrap split">
     <div>
       <p class="eyebrow reveal">Ce qui nous rend rapides</p>
       <h2 class="reveal d1">Un réseau qui<br>ne dort jamais</h2>
       <p class="lead reveal d2" style="margin-top:26px">Routage en temps réel, visibilité de bout en bout et une flotte
-      qui traite chaque envoi comme s'il était le seul. De l'entrepôt au quai, sans angle mort.</p>
+      qui traite chaque envoi comme s'il était le seul.</p>
       <a class="cta reveal d3" href="#contact">Demander un devis <span class="arrow">→</span></a>
     </div>
     <div class="reveal d2">
@@ -384,16 +336,13 @@ footer{border-top:1px solid var(--line);padding:60px 0 48px;margin-top:60px}
     <p class="eyebrow reveal" style="justify-content:center">Ils nous font confiance</p>
     <h2 class="reveal d1" style="margin-bottom:44px">Trusted by businesses<br>across the map</h2>
     <div class="logos reveal d2">
-      <div class="lg">MERI<span>DIAN</span></div>
-      <div class="lg">VOLT<span>A</span></div>
-      <div class="lg">NORD<span>KAP</span></div>
-      <div class="lg">ATLAS<span>·CO</span></div>
-      <div class="lg">KAI<span>ROS</span></div>
+      <div class="lg">MERI<span>DIAN</span></div><div class="lg">VOLT<span>A</span></div>
+      <div class="lg">NORD<span>KAP</span></div><div class="lg">ATLAS<span>·CO</span></div><div class="lg">KAI<span>ROS</span></div>
     </div>
   </div>
 </section>
 
-<!-- ============ FOOTER / CTA ============ -->
+<!-- ============ FOOTER ============ -->
 <footer id="contact">
   <div class="wrap">
     <div class="foot">
@@ -402,13 +351,7 @@ footer{border-top:1px solid var(--line);padding:60px 0 48px;margin-top:60px}
         <div class="big">MOVE<br>THE WORLD.</div>
         <a class="cta" href="#" style="margin-top:28px">Parler à un expert <span class="arrow">→</span></a>
       </div>
-      <div class="meta">
-        IONA FREIGHT<br>
-        Quai 7 · Port Autonome<br>
-        hello@iona.freight<br>
-        <br>
-        © MMXXV · Démo · Aucun conteneur réel n'a été déplacé.
-      </div>
+      <div class="meta">IONA FREIGHT<br>Quai 7 · Port Autonome<br>hello@iona.freight<br><br>© MMXXV · Démo · Aucun conteneur réel n'a été déplacé.</div>
     </div>
   </div>
 </footer>
@@ -418,136 +361,229 @@ footer{border-top:1px solid var(--line);padding:60px 0 48px;margin-top:60px}
 <script>
 (function(){
   "use strict";
-  var reduce = window.matchMedia("(prefers-reduced-motion:reduce)").matches;
+  var reduce=matchMedia("(prefers-reduced-motion:reduce)").matches;
+  var lerp=function(a,b,t){return a+(b-a)*t;},
+      clamp=function(v,a,b){return v<a?a:v>b?b:v;},
+      map=function(v,a,b){return clamp((v-a)/(b-a),0,1);},
+      ease=function(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;};
 
-  /* ---------- Theme toggle ---------- */
-  var root = document.documentElement;
+  /* ---- Theme ---- */
+  var root=document.documentElement;
   document.getElementById("themeToggle").addEventListener("click",function(){
-    var cur = root.getAttribute("data-theme");
-    if(!cur){ // system -> pick opposite of what's showing
-      cur = window.matchMedia("(prefers-color-scheme:dark)").matches ? "dark":"light";
-    }
-    root.setAttribute("data-theme", cur==="dark"?"light":"dark");
+    var cur=root.getAttribute("data-theme");
+    if(!cur)cur=matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light";
+    root.setAttribute("data-theme",cur==="dark"?"light":"dark");
   });
 
-  /* ---------- Scroll reveal ---------- */
-  var io = new IntersectionObserver(function(entries){
-    entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target);} });
-  },{threshold:.18});
+  /* ---- Reveal + counters ---- */
+  var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target);}});},{threshold:.18});
   document.querySelectorAll(".reveal").forEach(function(el){io.observe(el);});
-
-  /* ---------- Count-up stats ---------- */
   var counted=false;
-  function runCounters(){
-    if(counted) return; counted=true;
-    document.querySelectorAll(".stat .n").forEach(function(el){
-      var to=parseFloat(el.getAttribute("data-to")), suf=el.getAttribute("data-suffix")||"";
-      var dur=1200, t0=null;
-      function step(ts){ if(!t0)t0=ts; var p=Math.min(1,(ts-t0)/dur);
-        var e=1-Math.pow(1-p,3); var v=to*e;
-        var out = to%1===0 ? Math.round(v) : v.toFixed(1);
-        el.innerHTML = out + (suf?("<em>"+suf+"</em>"):"");
-        if(p<1) requestAnimationFrame(step);
-      }
-      requestAnimationFrame(step);
+  new IntersectionObserver(function(es){es.forEach(function(e){
+    if(e.isIntersecting&&!counted){counted=true;
+      document.querySelectorAll(".stat .n").forEach(function(el){
+        var to=parseFloat(el.getAttribute("data-to")),suf=el.getAttribute("data-suffix")||"",t0=null;
+        function step(ts){if(!t0)t0=ts;var p=Math.min(1,(ts-t0)/1200),e=1-Math.pow(1-p,3),v=to*e;
+          el.innerHTML=(to%1===0?Math.round(v):v.toFixed(1))+(suf?"<em>"+suf+"</em>":"");
+          if(p<1)requestAnimationFrame(step);}
+        requestAnimationFrame(step);});}
+  });},{threshold:.3}).observe(document.getElementById("stats"));
+
+  /* ---- Build yard containers (3x3 wall = 9 boxes) ---- */
+  var palette=[["#e8480f","#c73c0c"],["#2f6bd0","#25539f"],["#c9ccd1","#a9adb3"],
+               ["#f0a500","#c98700"],["#2fae6b","#1f8451"],["#8a5cf6","#6d3fd6"]];
+  var yardScene=document.getElementById("yardScene"),yardBoxes=[],yardStates=[];
+  var COLS=3,ROWS=3,BW=210,BH=118,BD=118,GAP=8;
+  for(var i=0;i<COLS*ROWS;i++){
+    var col=i%COLS,rw=(i/COLS)|0,pal=palette[i%palette.length];
+    var b=document.createElement("div");b.className="box";
+    b.style.cssText="--c:"+pal[0]+";--c2:"+pal[1]+";--w:"+BW+"px;--h:"+BH+"px;--d:"+BD+"px";
+    b.innerHTML='<div class="face side f-front"><span class="code" '+(i%6===2?'style="color:#1a1e24;text-shadow:none"':'')+'>IONU '+(100+i*37)+' '+(i*13%9)+'<small>22G1</small></span><span class="logo-side" '+(i%6===2?'style="color:#1a1e24"':'')+'>IONA</span></div>'+
+      '<div class="face side f-back"></div><div class="face end f-right"></div><div class="face end f-left"></div><div class="face cap f-top"></div><div class="face cap f-bottom"></div>';
+    yardScene.appendChild(b);yardBoxes.push(b);
+    var ex=(col-(COLS-1)/2)*(BW+GAP), ey=((ROWS-1)/2-rw)*(BH+GAP);
+    yardStates.push({e:{x:ex,y:ey}, s:{x:ex+(Math.sin(i*2.1)*640), y:ey+(Math.cos(i*1.7)*520), z:(i%2?260:-220),
+      rx:(i%3-1)*18, ry:(i%2?1:-1)*(30+i*3), rz:(i%2-.5)*14}});
+  }
+
+  /* ---- Build ship deck cargo (mini containers) ---- */
+  var deck=document.getElementById("deckCargo");
+  var mW=88,mH=52,mD=110;
+  for(var c=0;c<6;c++)for(var r2=0;r2<2;r2++){
+    var pal2=palette[(c+r2)%palette.length];
+    var mb=document.createElement("div");mb.className="box";
+    mb.style.cssText="--c:"+pal2[0]+";--c2:"+pal2[1]+";--w:"+mW+"px;--h:"+mH+"px;--d:"+mD+"px;"+
+      "left:"+(-250+c*90)+"px;top:"+(-6-r2*(mH+2))+"px";
+    mb.innerHTML='<div class="face side f-front"></div><div class="face side f-back"></div><div class="face end f-right"></div><div class="face end f-left"></div><div class="face cap f-top"></div><div class="face cap f-bottom"></div>';
+    deck.appendChild(mb);
+  }
+
+  var pbar=document.getElementById("pbar");
+  function pageProgress(){var h=document.documentElement;return clamp(h.scrollTop/(h.scrollHeight-h.clientHeight),0,1);}
+
+  if(reduce){ /* static: just reveal, no scrubbing/canvas loops */
+    document.getElementById("yardLine").style.opacity=1;
+    return;
+  }
+
+  /* ================= SCROLL-DRIVEN SCENES ================= */
+  function trackP(el){var r=el.getBoundingClientRect();var tot=r.height-innerHeight;return clamp(-r.top/tot,0,1);}
+
+  var heroScene=document.getElementById("heroScene"),heroBox=document.getElementById("heroBox"),
+      heroCopy=document.getElementById("heroCopy"),heroTrack=document.getElementById("hero");
+  var yardTrack=document.getElementById("yard"),yardLine=document.getElementById("yardLine");
+  var craneTrack=document.getElementById("crane"),craneRig=document.getElementById("craneRig"),
+      trolley=document.getElementById("trolley"),cable=document.getElementById("cable"),
+      craneBox=document.getElementById("craneBox"),craneCopy=document.getElementById("craneCopy");
+  var seaTrack=document.getElementById("sea"),ship=document.getElementById("ship"),seaCopy=document.getElementById("seaCopy");
+  var globeTrack=document.getElementById("globe");
+
+  var cur={hero:0,yard:0,crane:0,sea:0},tgt={hero:0,yard:0,crane:0,sea:0},raf=false;
+
+  function computeTargets(){tgt.hero=trackP(heroTrack);tgt.yard=trackP(yardTrack);tgt.crane=trackP(craneTrack);tgt.sea=trackP(seaTrack);}
+
+  function renderScroll(){
+    var moving=false;
+    for(var k in tgt){cur[k]=lerp(cur[k],tgt[k],.12);if(Math.abs(cur[k]-tgt[k])>.0004)moving=true;else cur[k]=tgt[k];}
+    pbar.style.width=(pageProgress()*100).toFixed(2)+"%";
+
+    /* HERO */
+    var hp=cur.hero, spin=hp*220, out=map(hp,0,.6);
+    heroScene.style.transform="rotateX("+lerp(-8,-2,hp).toFixed(2)+"deg) scale("+(1-out*.12).toFixed(3)+")";
+    heroBox.style.transform="translateY("+(Math.sin(hp*6.28)*6-out*40).toFixed(1)+"px) rotateY("+(24+spin).toFixed(1)+"deg) rotateX(-6deg)";
+    heroCopy.style.opacity=(1-map(hp,.05,.4)).toFixed(3);
+    heroCopy.style.transform="translateY("+(-out*50).toFixed(1)+"px)";
+
+    /* YARD assemble */
+    var yp=cur.yard, asm=ease(map(yp,0,.6)), settle=map(yp,.6,1);
+    yardBoxes.forEach(function(b,i){var s=yardStates[i].s,e=yardStates[i].e;
+      var x=lerp(s.x,e.x,asm),y=lerp(s.y,e.y,asm),z=lerp(s.z,0,asm),
+          rx=lerp(s.rx,0,asm),ry=lerp(s.ry,0,asm),rz=lerp(s.rz,0,asm);
+      b.style.transform="translate3d("+x.toFixed(1)+"px,"+y.toFixed(1)+"px,"+z.toFixed(1)+"px) rotateX("+rx.toFixed(1)+"deg) rotateY("+ry.toFixed(1)+"deg) rotateZ("+rz.toFixed(1)+"deg)";
     });
+    yardScene.style.transform="rotateX("+lerp(4,-2,asm).toFixed(2)+"deg) rotateY("+(lerp(28,0,asm)+settle*18).toFixed(2)+"deg) scale("+lerp(.62,.9,asm).toFixed(3)+")";
+    yardLine.style.opacity=map(yp,.68,.94).toFixed(3);
+    yardLine.style.transform="translateY("+lerp(30,0,ease(map(yp,.68,.94))).toFixed(1)+"px)";
+
+    /* CRANE lift: trolley slides, container hoists up then across */
+    var cp=cur.crane;
+    craneRig.style.transform="rotateY("+lerp(-18,-6,map(cp,0,1)).toFixed(2)+"deg) rotateX(4deg) scale("+lerp(.7,.86,map(cp,0,.5)).toFixed(3)+")";
+    var hoist=lerp(200,40,ease(map(cp,0,.45)));          /* cable shortens: box rises */
+    var slide=lerp(-150,150,ease(map(cp,.35,.9)));       /* trolley crosses beam */
+    trolley.style.transform="translateX("+slide.toFixed(1)+"px)";
+    cable.style.height=hoist.toFixed(1)+"px";
+    craneBox.style.transform="translateY("+hoist.toFixed(1)+"px) rotateY("+(Math.sin(cp*6.28)*3).toFixed(2)+"deg)";
+    craneCopy.style.opacity=(1-map(cp,.6,.95)).toFixed(3);
+
+    /* SHIP: sails across + bobs */
+    var sp=cur.sea;
+    var sx=lerp(-innerWidth*.6,innerWidth*.55,sp);
+    var bob=Math.sin(sp*10)*10, roll=Math.sin(sp*8)*1.6;
+    ship.style.transform="translate3d("+sx.toFixed(1)+"px,"+bob.toFixed(1)+"px,0) rotateY(-20deg) rotateX(6deg) rotateZ("+roll.toFixed(2)+"deg) scale(.9)";
+    seaCopy.style.opacity=(1-map(sp,.55,.95)).toFixed(3);
+
+    if(moving){requestAnimationFrame(renderScroll);}else raf=false;
   }
-  var statSec=document.getElementById("network");
-  new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)runCounters();});},{threshold:.3}).observe(statSec);
+  function onScroll(){computeTargets();if(!raf){raf=true;requestAnimationFrame(renderScroll);}}
+  addEventListener("scroll",onScroll,{passive:true});
+  addEventListener("resize",function(){computeTargets();sizeAll();onScroll();});
 
-  if(reduce) return; /* skip the 3D scrubbing entirely */
-
-  /* ================================================================
-     PINNED 3D SCENE
-     Map scroll progress through .track (0..1) to per-container
-     transforms. A single smoothed value drives everything so the
-     motion feels inertial even though page scroll stays native.
-     ================================================================ */
-  var track   = document.getElementById("scene");
-  var scene   = document.getElementById("scene3d");
-  var heroCopy= document.getElementById("heroCopy");
-  var stageLine=document.getElementById("stageLine");
-  var pbar    = document.getElementById("pbar");
-  var boxes   = ["b1","b2","b3","b4"].map(function(id){return document.getElementById(id);});
-
-  function lerp(a,b,t){return a+(b-a)*t;}
-  function clamp(v,a,b){return v<a?a:v>b?b:v;}
-  function map(v,a,b){return clamp((v-a)/(b-a),0,1);}
-  function ease(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
-
-  /* Start (scattered, floating, rotated) and end (stacked wall) states
-     for each container. Values are unitless px / deg. */
-  var STATES = [
-    // b1 (orange) -> bottom-left of wall
-    {s:{x:-360,y:-40, z:120, rx:-12, ry:34,  rz:-4},  e:{x:-155,y:95,  z:0, rx:0, ry:0, rz:0}},
-    // b2 (blue)   -> bottom-right
-    {s:{x: 380,y: 60, z:-40, rx:10,  ry:-40, rz:6},   e:{x: 155,y:95,  z:0, rx:0, ry:0, rz:0}},
-    // b3 (grey)   -> top-left
-    {s:{x:-300,y: 220,z:-180,rx:16,  ry:26,  rz:8},   e:{x:-155,y:-73, z:0, rx:0, ry:0, rz:0}},
-    // b4 (yellow) -> top-right
-    {s:{x: 300,y:-260,z:60,  rx:-18, ry:-24, rz:-8},  e:{x: 155,y:-73, z:0, rx:0, ry:0, rz:0}}
-  ];
-
-  var current=0, target=0, ticking=false;
-
-  function computeTarget(){
-    var r = track.getBoundingClientRect();
-    var total = r.height - window.innerHeight;
-    target = clamp(-r.top/total,0,1);
+  /* ================= TIME-BASED CANVASES (active only) ================= */
+  var animators=[];
+  function registerCanvas(canvas,sectionEl,tick){
+    var a={c:canvas,ctx:canvas.getContext("2d"),active:false,tick:tick,w:0,h:0,dpr:1};
+    new IntersectionObserver(function(es){es.forEach(function(e){a.active=e.isIntersecting;});},{threshold:.02}).observe(sectionEl);
+    animators.push(a);return a;
   }
+  function sizeCanvas(a){a.dpr=Math.min(2,devicePixelRatio||1);
+    a.w=a.c.clientWidth;a.h=a.c.clientHeight;a.c.width=a.w*a.dpr;a.c.height=a.h*a.dpr;
+    a.ctx.setTransform(a.dpr,0,0,a.dpr,0,0);}
+  function css(v){return getComputedStyle(document.body).getPropertyValue(v).trim()||v;}
 
-  function render(){
-    current = lerp(current, target, 0.12);
-    if(Math.abs(current-target)<0.0004) current=target;
-    var p = current;
+  /* --- Dust particles (hero) --- */
+  var dust=registerCanvas(document.getElementById("dust"),heroTrack,function(a,t){
+    var x=a.ctx;x.clearRect(0,0,a.w,a.h);
+    if(!a._p){a._p=[];for(var i=0;i<70;i++)a._p.push({x:Math.random(),y:Math.random(),r:Math.random()*2+.4,s:Math.random()*.00006+.00002,ph:Math.random()*6.28});}
+    var col=css("--accent");
+    a._p.forEach(function(p){p.y-=p.s* (t-(a._t||t));
+      if(p.y<-.02)p.y=1.02;
+      var px=(p.x+Math.sin(t*.0004+p.ph)*.02)*a.w, py=p.y*a.h;
+      x.globalAlpha=.10+Math.abs(Math.sin(t*.0006+p.ph))*.22;
+      x.fillStyle= p.ph>3?col:css("--steel");
+      x.beginPath();x.arc(px,py,p.r,0,6.283);x.fill();});
+    x.globalAlpha=1;a._t=t;
+  });
 
-    pbar.style.width = (p*100).toFixed(2)+"%";
+  /* --- Ocean waves (ship) --- */
+  var ocean=registerCanvas(document.getElementById("ocean"),seaTrack,function(a,t){
+    var x=a.ctx,W=a.w,H=a.h,horizon=H*.6;x.clearRect(0,0,W,H);
+    var sea=css("--sea");
+    var g=x.createLinearGradient(0,horizon,0,H);g.addColorStop(0,sea);g.addColorStop(1,"rgba(0,0,0,.35)");
+    x.fillStyle=g;x.fillRect(0,horizon,W,H-horizon);
+    x.strokeStyle="rgba(255,255,255,.10)";x.lineWidth=1.2;
+    for(var l=0;l<9;l++){var y=horizon+(H-horizon)*(l+1)/10;
+      x.beginPath();
+      for(var px=0;px<=W;px+=8){var yy=y+Math.sin(px*.012+t*.0016+l)*(3+l*.7)+Math.sin(px*.03-t*.001)*1.5;
+        px===0?x.moveTo(px,yy):x.lineTo(px,yy);}
+      x.globalAlpha=.5-l*.04;x.stroke();}
+    x.globalAlpha=1;
+  });
 
-    /* Phase split:
-       0.00–0.55  containers fly in & assemble the wall
-       0.55–1.00  camera settles, mid headline fades in            */
-    var assemble = map(p,0,0.55);
-    var settle   = map(p,0.55,1);
-    var ea = ease(assemble);
-
-    boxes.forEach(function(box,i){
-      var st=STATES[i].s, en=STATES[i].e;
-      var x=lerp(st.x,en.x,ea), y=lerp(st.y,en.y,ea), z=lerp(st.z,en.z,ea);
-      var rx=lerp(st.rx,en.rx,ea), ry=lerp(st.ry,en.ry,ea), rz=lerp(st.rz,en.rz,ea);
-      // gentle idle drift after assembly
-      var drift = settle * (i%2?-1:1) * 6;
-      box.style.transform =
-        "translate3d("+x.toFixed(1)+"px,"+(y+drift).toFixed(1)+"px,"+z.toFixed(1)+"px)"+
-        " rotateX("+rx.toFixed(2)+"deg) rotateY("+ry.toFixed(2)+"deg) rotateZ("+rz.toFixed(2)+"deg)";
+  /* --- Route globe --- */
+  var ports=[["RTM",51.9,4.5],["SIN",1.35,103.8],["SHA",31.2,121.5],["LAX",33.7,-118.2],
+             ["HAM",53.5,10],["NYC",40.7,-74],["DXB",25.2,55.3],["BOM",19,72.8],["SAN",-23.9,-46.3],["SYD",-33.8,151.2]];
+  var arcs=[[0,1],[2,3],[4,5],[6,7],[8,5],[9,1],[0,4]];
+  function v3(lat,lon){var la=lat*Math.PI/180,lo=lon*Math.PI/180;
+    return [Math.cos(la)*Math.sin(lo),Math.sin(la),Math.cos(la)*Math.cos(lo)];}
+  function rotY(p,a){var c=Math.cos(a),s=Math.sin(a);return [p[0]*c+p[2]*s,p[1],-p[0]*s+p[2]*c];}
+  var globe=registerCanvas(document.getElementById("globeCanvas"),globeTrack,function(a,t){
+    var x=a.ctx,W=a.w,H=a.h,cx=W*.42,cy=H*.5,R=Math.min(W,H)*.34,rot=t*.00016;
+    x.clearRect(0,0,W,H);
+    var ink=css("--ink"),acc=css("--accent"),blue=css("--blue");
+    /* graticule dots */
+    for(var la=-80;la<=80;la+=12)for(var lo=0;lo<360;lo+=9){
+      var p=rotY(v3(la,lo),rot); if(p[2]<=0)continue;
+      var sx=cx+p[0]*R, sy=cy-p[1]*R;
+      x.globalAlpha=.10+p[2]*.22;x.fillStyle=ink;
+      x.beginPath();x.arc(sx,sy,1,0,6.283);x.fill();}
+    x.globalAlpha=1;
+    /* rim */
+    x.strokeStyle=blue;x.globalAlpha=.4;x.lineWidth=1.4;
+    x.beginPath();x.arc(cx,cy,R,0,6.283);x.stroke();x.globalAlpha=1;
+    /* arcs */
+    arcs.forEach(function(pr,idx){
+      var A=v3(ports[pr[0]][1],ports[pr[0]][2]),B=v3(ports[pr[1]][1],ports[pr[1]][2]);
+      var dot=A[0]*B[0]+A[1]*B[1]+A[2]*B[2],om=Math.acos(clamp(dot,-1,1)),so=Math.sin(om)||1e-4;
+      x.beginPath();var started=false,N=48;
+      for(var s=0;s<=N;s++){var tt=s/N,
+        w0=Math.sin((1-tt)*om)/so,w1=Math.sin(tt*om)/so,
+        px=A[0]*w0+B[0]*w1,py=A[1]*w0+B[1]*w1,pz=A[2]*w0+B[2]*w1,
+        len=Math.sqrt(px*px+py*py+pz*pz),lift=1+.14*Math.sin(Math.PI*tt);
+        var p=rotY([px/len*lift,py/len*lift,pz/len*lift],rot);
+        var sx=cx+p[0]*R,sy=cy-p[1]*R;
+        if(p[2]<=-.1){started=false;continue;}
+        if(!started){x.moveTo(sx,sy);started=true;}else x.lineTo(sx,sy);}
+      x.strokeStyle=acc;x.globalAlpha=.55;x.lineWidth=1.6;x.stroke();x.globalAlpha=1;
+      /* moving pulse */
+      var tt=((t*.0004+idx*.14)%1),w0=Math.sin((1-tt)*om)/so,w1=Math.sin(tt*om)/so,
+        px=A[0]*w0+B[0]*w1,py=A[1]*w0+B[1]*w1,pz=A[2]*w0+B[2]*w1,
+        len=Math.sqrt(px*px+py*py+pz*pz),lift=1+.14*Math.sin(Math.PI*tt),
+        p=rotY([px/len*lift,py/len*lift,pz/len*lift],rot);
+      if(p[2]>-.1){x.fillStyle=acc;x.beginPath();x.arc(cx+p[0]*R,cy-p[1]*R,2.6,0,6.283);x.fill();}
     });
+    /* ports */
+    ports.forEach(function(pt){var p=rotY(v3(pt[1],pt[2]),rot);if(p[2]<=0)return;
+      var sx=cx+p[0]*R,sy=cy-p[1]*R;x.fillStyle=acc;x.beginPath();x.arc(sx,sy,2.4,0,6.283);x.fill();
+      x.globalAlpha=.7;x.font="9px ui-monospace,monospace";x.fillStyle=ink;x.fillText(pt[0],sx+5,sy+3);x.globalAlpha=1;});
+  });
 
-    /* stage camera: start angled, straighten as we assemble, then a slow orbit */
-    var camY = lerp(24,0,ea) + settle*10;
-    var camX = lerp(6,0,ea);
-    var scale = lerp(.82,1,ea) - settle*0.04;
-    scene.style.transform =
-      "rotateX("+camX.toFixed(2)+"deg) rotateY("+camY.toFixed(2)+"deg) scale("+scale.toFixed(3)+")";
+  function sizeAll(){[dust,ocean,globe].forEach(sizeCanvas);}
 
-    /* hero copy fades out as containers close in */
-    var heroOut = map(p,0.06,0.30);
-    heroCopy.style.opacity = (1-heroOut).toFixed(3);
-    heroCopy.style.transform = "translateY("+(-heroOut*40).toFixed(1)+"px) scale("+(1-heroOut*0.06).toFixed(3)+")";
+  /* ---- Master clock: only ticks active canvases ---- */
+  function clock(t){for(var i=0;i<animators.length;i++){var a=animators[i];if(a.active)a.tick(a,t);}requestAnimationFrame(clock);}
 
-    /* mid headline fades in during settle */
-    var lineIn = map(p,0.62,0.9);
-    stageLine.style.opacity = lineIn.toFixed(3);
-    stageLine.style.transform = "translateY("+lerp(30,0,ease(lineIn)).toFixed(1)+"px)";
-
-    if(current!==target){ requestAnimationFrame(render); } else { ticking=false; }
-  }
-
-  function onScroll(){
-    computeTarget();
-    if(!ticking){ ticking=true; requestAnimationFrame(render); }
-  }
-  window.addEventListener("scroll",onScroll,{passive:true});
-  window.addEventListener("resize",onScroll);
-  computeTarget(); current=target; requestAnimationFrame(render);
+  sizeAll();computeTargets();for(var k in cur)cur[k]=tgt[k];
+  requestAnimationFrame(renderScroll);requestAnimationFrame(clock);
 })();
 </script>
 </body>
