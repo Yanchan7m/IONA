@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>IONA — Démo 3D (conteneurs)</title>
-<meta name="description" content="Conteneurs 3D qui s'empilent au scroll, vraie 3D WebGL.">
+<title>IONA — Conteneurs + camion (3D)</title>
+<meta name="description" content="Conteneurs 3D qui s'empilent puis un camion 3D qui arrive, au scroll.">
 <style>
   :root{--bg:#0b0f14;--bg2:#0e141b;--panel:#12181f;--ink:#e8edf2;--muted:#8b98a5;--line:#233040;--accent:#ff5a1f;--blue:#3a7bd5}
   *{box-sizing:border-box}
@@ -19,7 +19,7 @@
   .nav{display:flex;gap:22px;font-size:11px;letter-spacing:.18em;text-transform:uppercase}
   .nav a{color:#fff;text-decoration:none;opacity:.82}.nav a:hover{opacity:1}
   @media(max-width:680px){.nav{display:none}}
-  .track{position:relative;height:380vh}
+  .track{position:relative;height:560vh}
   .stage{position:sticky;top:0;height:100vh;overflow:hidden}
   canvas#c{position:absolute;inset:0;width:100%;height:100%;display:block}
   .overlay{position:absolute;z-index:6;pointer-events:none;will-change:transform,opacity;text-align:center;left:0;right:0;padding:0 16px}
@@ -81,8 +81,12 @@
       <p class="sub">Nous déplaçons de l'acier à travers le monde — sans drame, sans retard. Fais défiler.</p>
     </div>
     <div class="overlay" id="midLine" style="top:16vh;opacity:0">
-      <h2>Legacies that work<br>as hard as you do</h2>
+      <h2>A yard that<br>never sleeps</h2>
       <p class="sub" style="color:var(--accent)">— 14 000 conteneurs manutentionnés / jour</p>
+    </div>
+    <div class="overlay" id="truckLine" style="top:16vh;opacity:0">
+      <h2>From port<br>to door</h2>
+      <p class="sub" style="color:var(--accent)">— dernier kilomètre, sans rupture</p>
     </div>
     <div class="scroll-cue">Scroll<span></span></div>
   </div>
@@ -406,8 +410,12 @@ window.IONA3D = (function(){
   }
   var wallCenterY=1.5+((ROWS-1)/2)*(GH+0.2)+GH/2;
 
+  /* ---- Truck (drives in after the wall forms) ---- */
+  var tk=L.truck();tk.group.visible=false;tk.group.position.set(-34,0,6);scene.add(tk.group);
+
   var pbar=document.getElementById("pbar"),heroCopy=document.getElementById("heroCopy"),
-      midLine=document.getElementById("midLine"),track=document.getElementById("scene");
+      midLine=document.getElementById("midLine"),truckLine=document.getElementById("truckLine"),
+      track=document.getElementById("scene");
 
   function pageP(){var h=document.documentElement;return L.clamp(h.scrollTop/(h.scrollHeight-h.clientHeight),0,1);}
   var curP=0,tgtP=0,rafOn=false;
@@ -415,28 +423,47 @@ window.IONA3D = (function(){
 
   function apply(p){
     pbar.style.width=(pageP()*100).toFixed(2)+"%";
-    var assemble=L.ease(L.map(p,0.14,0.7)), settle=L.map(p,0.7,1);
-    var scaleIn=L.map(p,0.14,0.32);
+
+    /* ---- Act A: containers assemble into the wall ---- */
+    var assemble=L.ease(L.map(p,0.12,0.40));
+    var scaleIn=L.map(p,0.12,0.30);
     for(var i=0;i<boxes.length;i++){
       var s=states[i].s,e=states[i].e,g=boxes[i];
       g.position.set(L.lerp(s.x,e.x,assemble),L.lerp(s.y,e.y,assemble),L.lerp(s.z,e.z,assemble));
       g.rotation.set(L.lerp(s.rx,0,assemble),L.lerp(s.ry,0,assemble),L.lerp(s.rz,0,assemble));
-      var sc=Math.max(0.0001,scaleIn);g.scale.setScalar(sc);
+      g.scale.setScalar(Math.max(0.0001,scaleIn));
     }
-    // camera: subtle orbit + push in
-    var az=L.lerp(-0.55,0.5,p), dist=L.lerp(46,30,L.ease(L.map(p,0,0.7)))-settle*2;
-    var el=L.lerp(0.28,0.14,assemble);
-    var cy=Math.sin(el)*dist+wallCenterY;
-    var r=Math.cos(el)*dist;
+
+    /* ---- Act B: the truck drives across in front of the wall ---- */
+    var te=L.ease(L.map(p,0.5,0.92));
+    tk.group.visible = p>0.46;
+    var tx=L.lerp(-34,32,te);
+    tk.group.position.set(tx,0,6);
+    var spin=-tx*0.9;
+    for(var w=0;w<tk.wheels.length;w++)tk.wheels[w].rotation.z=spin;
+    tk.group.position.y=Math.sin(p*40)*0.03;   // engine idle bounce
+
+    /* ---- Camera: wall shot, then blend to a lower truck shot ---- */
+    var toTruck=L.ease(L.map(p,0.42,0.58));
+    var az=L.lerp(-0.5,0.42,p);
+    var dist=L.lerp(48,30,L.ease(L.map(p,0,0.45)));
+    dist=L.lerp(dist,44,toTruck);
+    var el=L.lerp(0.30,0.13,assemble); el=L.lerp(el,0.085,toTruck);
+    var ty=L.lerp(wallCenterY,2.5,toTruck);
+    var cy=Math.sin(el)*dist+ty, r=Math.cos(el)*dist;
     camera.position.set(Math.sin(az)*r,cy,Math.cos(az)*r);
-    camera.lookAt(0,wallCenterY,0);
-    // overlays
-    var heroOut=L.map(p,0.16,0.4);
+    camera.lookAt(0,ty,0);
+
+    /* ---- Overlays ---- */
+    var heroOut=L.map(p,0.14,0.34);
     heroCopy.style.opacity=(1-heroOut).toFixed(3);
     heroCopy.style.transform="translateY("+(-heroOut*50).toFixed(1)+"px)";
-    var lineIn=L.map(p,0.72,0.94);
+    var lineIn=L.clamp(Math.min(L.map(p,0.40,0.48),1-L.map(p,0.52,0.60)),0,1);
     midLine.style.opacity=lineIn.toFixed(3);
-    midLine.style.transform="translateY("+L.lerp(30,0,L.ease(lineIn)).toFixed(1)+"px)";
+    midLine.style.transform="translateY("+L.lerp(24,0,lineIn).toFixed(1)+"px)";
+    var tIn=L.clamp(Math.min(L.map(p,0.62,0.72),1-L.map(p,0.90,0.98)),0,1);
+    truckLine.style.opacity=tIn.toFixed(3);
+    truckLine.style.transform="translateY("+L.lerp(24,0,tIn).toFixed(1)+"px)";
   }
 
   function resize(){var w=canvas.clientWidth,h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
